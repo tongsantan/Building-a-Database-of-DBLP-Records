@@ -413,7 +413,9 @@ DROP TABLE Author_copy2;
 DROP TABLE tempAuthored;
 DROP TABLE tempPublication2;
 
-# Queries example
+###########################################################################################################################
+
+## Queries example
 ## Create Temp Count table for cross-reference between group members
 -- DROP TABLE TempCountTable;
 CREATE TABLE TempCountTable (TableName VARCHAR(25), RecordsCount INT, DistinctPubID INT, DistinctPubKey INT, DistinctAuthorID INT);
@@ -429,3 +431,87 @@ VALUES
 ('Proceedings', 	(SELECT COUNT(*) FROM Proceedings),		(SELECT COUNT(DISTINCT PubID) FROM Proceedings),	NULL, NULL);
 
 select * FROM TempCountTable;
+
+###########################################################################################################################
+
+## Sample questions
+
+## Q1. For each type of publication, count the total number of publications of that type between 2010-2019. 
+## Your query should return a set of (publication-type, count) pairs. For example, (article, 20000), (inproceedings, 30000), ...
+
+SELECT CONCAT(T2.PubType, ", ", T2.Count) AS 'Publication-type, Count'
+FROM
+(SELECT 	DISTINCT T.PubType AS 'PubType', 
+			COUNT(DISTINCT T.PubID) 	AS 'Count'		
+			FROM 
+			(SELECT pub.*, 
+					CASE 	WHEN p.PubID IS NOT NULL THEN 'Proceedings'
+							WHEN i.PubID IS NOT NULL THEN 'Inproceedings'
+							WHEN a.PubID IS NOT NULL THEN 'Article'				
+							WHEN b.PubID IS NOT NULL THEN 'Book'		                
+							WHEN ic.PubID IS NOT NULL THEN 'Incollection'
+							END AS PubType
+							FROM publication pub LEFT JOIN proceedings 	p 	ON pub.PubID = p.PubID 
+												 LEFT JOIN inproceedings i 	ON pub.PubID = i.PubID
+												 LEFT JOIN article 		a 	ON pub.PubID = a.PubID
+												 LEFT JOIN book			b	ON pub.PubID = b.PubID 
+												 LEFT JOIN incollection	ic	ON pub.PubID = ic.PubID
+							WHERE pub.Year >= '2010' AND pub.Year <= '2019') AS T
+							GROUP BY T.PubType) AS T2;
+
+###########################################################################################################################                            
+
+## Q2. Find all the conferences that have ever published more than 500 papers in one year. 
+## Note that one conference may be held every year (e.g., KDD runs many years, and each year the conference has a number of papers).
+
+SELECT DISTINCT ConferenceName FROM
+(SELECT SUBSTRING_INDEX(SUBSTRING_INDEX(t.PubKey, '/', -2), '/', 1) AS ConferenceName, 
+t.Year, COUNT(DISTINCT ic.PubID) + COUNT(DISTINCT ip.PubID) AS num_of_papers
+FROM (
+    SELECT pub.PubKey, p.PubID, pub.Year
+    FROM publication pub 
+    LEFT JOIN proceedings p ON p.PubID = pub.PubID
+    LEFT JOIN book b ON b.PubID = pub.PubID 
+) AS t
+LEFT JOIN inproceedings ip ON t.PubKey = ip.Crossref
+LEFT JOIN incollection ic ON t.PubKey = ic.Crossref 
+WHERE PubKey LIKE 'conf%'
+GROUP BY ConferenceName, t.Year
+HAVING num_of_papers > 500) a
+ORDER BY ConferenceName;
+
+########################################################################################################################### 
+
+## Q3. List the name of the conferences such that it has ever been held in June, 
+##		 and the corresponding proceedings (in the year where the conference was held in June) contain more than 100 publications.
+
+SELECT DISTINCT ConferenceName FROM (SELECT 
+	SUBSTRING_INDEX(SUBSTRING_INDEX(pub.PubKey, '/', -2), '/', 1) AS ConferenceName,
+    pub.Title AS ProceedingsName,
+    COUNT(DISTINCT ip.PubID) AS NumOfInproceedings,
+    pub.Year AS YearOfConference
+FROM publication pub 
+JOIN proceedings p ON pub.PubID = p.PubID 
+JOIN inproceedings ip ON pub.PubKey = ip.Crossref 
+WHERE pub.Title LIKE '%June%'
+AND pub.PubKey LIKE 'conf%'
+GROUP BY pub.PubID, pub.Title, ip.Crossref, pub.Year
+HAVING NumOfInproceedings > 100) t
+ORDER BY ConferenceName;
+
+########################################################################################################################### 
+
+## Q4. Find the names and number of publications for authors who have the earliest publication record in DBLP.
+
+SELECT DISTINCT a1.Name  AS AuthorName, 
+COUNT(DISTINCT p1.PubID) AS PublicationCount
+FROM publication p1 	JOIN authored ad1 ON ad1.PubID = p1.PubID 
+						JOIN author a1 ON ad1.AuthorID = a1.AuthorID
+                        
+WHERE a1.AuthorID IN 	(SELECT DISTINCT a.AuthorID 
+						FROM publication p 	JOIN authored ad ON ad.PubID = p.PubID 
+											JOIN author a ON ad.AuthorID = a.AuthorID
+						WHERE p.year = (SELECT min(year) FROM publication))  
+GROUP BY a1.AuthorID, a1.Name;
+
+###########################################################################################################################
