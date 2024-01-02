@@ -416,6 +416,7 @@ DROP TABLE tempPublication2;
 ###########################################################################################################################
 
 ## Queries example
+	
 ## Create Temp Count table for cross-reference between group members
 -- DROP TABLE TempCountTable;
 CREATE TABLE TempCountTable (TableName VARCHAR(25), RecordsCount INT, DistinctPubID INT, DistinctPubKey INT, DistinctAuthorID INT);
@@ -483,7 +484,7 @@ ORDER BY ConferenceName;
 ########################################################################################################################### 
 
 ## Q3. List the name of the conferences such that it has ever been held in June, 
-##		 and the corresponding proceedings (in the year where the conference was held in June) contain more than 100 publications.
+##     and the corresponding proceedings (in the year where the conference was held in June) contain more than 100 publications.
 
 SELECT DISTINCT ConferenceName FROM (SELECT 
 	SUBSTRING_INDEX(SUBSTRING_INDEX(pub.PubKey, '/', -2), '/', 1) AS ConferenceName,
